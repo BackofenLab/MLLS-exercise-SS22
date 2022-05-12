@@ -17,9 +17,9 @@ from sklearn.model_selection import cross_validate
 # list of all possible three-mers
 three_mers = [  # AAA, AAC, AAG ...
     f"{a}{b}{c}"
-    for a in ["A", "C", "T", "G"]
-    for b in ["A", "C", "T", "G"]
-    for c in ["A", "C", "T", "G"]
+    for a in ["A", "C", "U", "G"]
+    for b in ["A", "C", "U", "G"]
+    for c in ["A", "C", "U", "G"]
 ]
 
 # get data, one list element per entry1
