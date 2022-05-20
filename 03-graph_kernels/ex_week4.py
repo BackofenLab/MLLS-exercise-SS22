@@ -56,10 +56,8 @@ def NSPDK(g, d, r):
 		         r=r,
 		         )
 		     
-    print(vec)
-		         
+
     M = vec.vertex_transform(g)
-    print(M)
     M = M[0] 
     K = pairwise.linear_kernel(M,M)
          
@@ -95,16 +93,7 @@ def get_RLK(A, alpha=4.):
     
     return RLK
 
-def box_plot(c_eval, x_tick_labels):
 
-    fig1, ax1 = plt.subplots()   
-    ax1.boxplot(c_eval)
-    ax1.set_xticklabels(x_tick_labels)
-    ax1.set_title('C-param')
-    ax1.set_ylabel('performance')
-    plt.show()
-
-    return
 
 def get_RBF(A, s=1.):
     """ Compute radial basis function kernel.
