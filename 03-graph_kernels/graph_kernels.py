@@ -155,19 +155,10 @@ def get_MEDK(A, beta=0.04):
     
 
 	
-def main():
-
-
-    
-    
-    return
-
-
-	
 if __name__=="__main__":
 
 
-    main()
+
 
 
     
