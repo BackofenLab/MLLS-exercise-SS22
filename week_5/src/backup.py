@@ -176,3 +176,37 @@ def train(data, optimizer, model, criterion):
 
 if __name__ == "__main__":
     read_files()
+
+
+'''
+ ############ accuracy on split 0 ############
+Accuracy hard margin SVM on split 0: 0.7474332648870636
+Accuracy soft margin SVM on split 0: 0.5174537987679672
+ ############ accuracy on split 1 ############
+Accuracy hard margin SVM on split 1: 0.7084188911704312
+Accuracy soft margin SVM on split 1: 0.5708418891170431
+ ############ accuracy on split 2 ############
+Accuracy hard margin SVM on split 2: 0.7453798767967146
+Accuracy soft margin SVM on split 2: 0.5893223819301848
+ ############ accuracy on split 3 ############
+Accuracy hard margin SVM on split 3: 0.7063655030800822
+Accuracy soft margin SVM on split 3: 0.21149897330595482
+ ############ accuracy on split 4 ############
+Accuracy hard margin SVM on split 4: 0.7268993839835729
+Accuracy soft margin SVM on split 4: 0.4620123203285421
+####################################################################
+Accuracy hard margin SVM on all splits: 0.7268993839835729
+Accuracy soft margin SVM on all splits: 0.4702258726899385
+####################################################################
+SVC(C=1, class_weight='balanced', kernel='linear')
+Accuracy best SVM on split 0: 0.6611909650924025
+Accuracy best SVM on split 1: 0.7248459958932238
+Accuracy best SVM on split 2: 0.7597535934291582
+Accuracy best SVM on split 3: 0.6591375770020534
+Accuracy best SVM on split 4: 0.8726899383983573
+####################################################################
+Accuracy best SVM on  all splits: 0.735523613963039
+####################################################################
+Found 6180 possible driver genes
+Top 20 indeces: (6099, 6937, 10533, 587, 6896, 3960, 9120, 2742, 4747, 8153, 6423, 8326, 2392, 8061, 889, 5290, 9677, 8026, 4919, 3801)
+'''
