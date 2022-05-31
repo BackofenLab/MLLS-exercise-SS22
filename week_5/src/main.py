@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 import numpy as np
 import json
+import random
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -14,6 +15,7 @@ from torch_geometric.data import Data
 from torch_geometric.utils import to_networkx
 from torch.nn import Linear
 from torch_geometric.nn import GCNConv
+from sklearn.model_selection import KFold
 
 
 local_path = "../week_5/"
@@ -45,7 +47,7 @@ def visualize_embedding(h, color, epoch=None, loss=None):
 class GCN(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        torch.manual_seed(1234)
+        torch.manual_seed(32)
         self.conv1 = GCNConv(12, 4)
         self.conv2 = GCNConv(4, 4)
         self.conv3 = GCNConv(4, 2)
@@ -69,7 +71,6 @@ def load_node_csv(path, index_col, encoders=None, **kwargs):
     df = pd.read_csv(path, index_col=index_col, header=None)
     mapping = {index: i for i, index in enumerate(df.index.unique())}
     x = df.iloc[:, 0:]
-    #print(x)
     return x, mapping
 
 
@@ -93,11 +94,10 @@ def read_files():
     
     x, mapping = load_node_csv(final_path + "gene_features", 0)
     y = torch.zeros(x.shape[0], dtype=torch.long)
+    # assign all labels to -1
     y[:] = -1
-
     driver_ids = driver.replace({0: mapping})
     passenger_ids = passengers.replace({0: mapping})
-
     # driver = 1, passenger = 0
     y[driver_ids[0].tolist()] = 1
     y[passenger_ids[0].tolist()] = 0
@@ -109,46 +109,114 @@ def read_files():
         outfile.write(json.dumps(mapping))
 
     print("replacing gene ids")
+    # set number of edges
     links = links[:500]
+    # replace gene names with ids
     re_links = links.replace({0: mapping})
     re_links = re_links.replace({1: mapping})
     print(re_links)
-
-    links_mat = re_links.to_numpy()
-
     # create data object
-    x = x.loc[:, 1:]
-    x = x.to_numpy()
+    x = x.loc[:, 1:].to_numpy()
     x = torch.tensor(x, dtype=torch.float)
-    edge_index = torch.tensor(links_mat, dtype=torch.long) 
-    data = Data(x=x, edge_index=edge_index.t().contiguous())
+    edge_index = torch.tensor(re_links.to_numpy(), dtype=torch.long)
+    compact_data = Data(x=x, edge_index=edge_index.t().contiguous())
 
     #print(gene_features[0])
-    print("create mask...")
+    #print("create mask...")
     driver_gene_list.extend(passenger_gene_list)
-    tr_mask_drivers = gene_features[0].isin(driver_gene_list)
-    tr_mask_drivers = torch.tensor(tr_mask_drivers, dtype=torch.bool)
-    data.train_mask = tr_mask_drivers
-    data.y = y
+    #tr_mask_drivers = gene_features[0].isin(driver_gene_list)
+    #tr_mask_drivers = torch.tensor(tr_mask_drivers, dtype=torch.bool)
+    #compact_data.train_mask = tr_mask_drivers
+    compact_data.y = y
 
-    print(data)
+    print(compact_data)
 
     # plot original graph
-    G = to_networkx(data, to_undirected=True)
-    visualize_graph(G, color=data.y)
-
-    sys.exit()
+    #print("plot original graph")
+    #G = to_networkx(data, to_undirected=True)
+    #visualize_graph(G, color=data.y)
 
     model = GCN()
-
     print(model)
+
     criterion = torch.nn.CrossEntropyLoss()  # Define loss criterion.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)  # Define optimizer.
 
-    for epoch in range(2000):
-        loss, h = train(data, optimizer, model, criterion)
-        if epoch % 10 == 0:
-            print("Loss after {} epochs: {}".format(str(epoch), str(loss)))
+    print("Replacing gene ids...")
+    all_gene_ids = gene_features.replace({0: mapping})
+    #print(all_gene_ids)
+    k_folds = 5
+    
+    driver_ids_list = driver_ids[0].tolist()
+    passenger_ids_list = passenger_ids[0].tolist()
+    driver_ids_list.extend(passenger_ids_list)
+    random.shuffle(driver_ids_list)
+    driver_ids_list = np.reshape(driver_ids_list, (len(driver_ids_list), 1))
+    #print(driver_ids_list.shape)
+    kfold = KFold(n_splits=k_folds, shuffle=True)
+    for epoch in range(200):
+        tr_acc_fold = list()
+        te_acc_fold = list()
+        for fold, (train_ids, test_ids) in enumerate(kfold.split(driver_ids_list)):
+            #print(fold, len(train_ids), driver_ids_list[train_ids])
+            #print(fold, len(test_ids), driver_ids_list[test_ids])
+            #print("----")
+            tr_genes = driver_ids_list[train_ids]
+            tr_genes = tr_genes.reshape((tr_genes.shape[0]))
+
+            te_genes = driver_ids_list[test_ids]
+            #print(te_genes)
+            te_genes = te_genes.reshape((te_genes.shape[0]))
+            #print(te_genes[0])
+            #print(tr_genes, te_genes, all_gene_ids)
+            #print("----")
+            tr_mask = all_gene_ids[0].isin(tr_genes)
+            te_mask = all_gene_ids[0].isin(te_genes)
+
+            #print(tr_genes[0], tr_genes[1])
+            #print(tr_mask[tr_genes[0]], tr_mask[tr_genes[1]])
+
+            #print(te_genes[0], te_genes[1])
+            #print(te_mask[te_genes[0]], te_mask[te_genes[1]])
+            
+            tr_mask = torch.tensor(tr_mask, dtype=torch.bool)
+            te_mask = torch.tensor(te_mask, dtype=torch.bool)
+
+            #print(te_mask[])
+            print("Setting tr and te masks...")
+            compact_data.train_mask = tr_mask
+            compact_data.test_mask = te_mask
+
+            print("Training epoch {}, fold {}/{} ...".format(str(epoch), str(fold), str(k_folds)))
+            tr_loss, h = train(compact_data, optimizer, model, criterion)
+            tr_acc_fold.append(tr_loss)
+
+            # predict on test fold
+            model.eval()
+            out = model(compact_data.x, compact_data.edge_index)
+            #print(out)
+            
+            pred = out[0].argmax(dim=1)  # Use the class with highest probability.
+            #print(pred.shape)
+            #print(compact_data.test_mask[te_genes[0]])
+            test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]  # Check against ground-truth labels.
+            #print(test_correct)
+            test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())  # Derive ratio of correct predictions.
+            print("Epoch: {}, Fold: {}/{}, Train loss: {}, test accuracy: {}".format(str(epoch), str(fold), str(k_folds), str(tr_loss), str(test_acc)))
+            te_acc_fold.append(test_acc)
+            print()
+        if epoch % 20 == 0:
+            print("Training Loss after {} epochs: {}".format(str(epoch), str(torch.mean(tr_acc_fold))))
+            print("Test Loss after {} epochs: {}".format(str(epoch), str(torch.mean(te_acc_fold))))
+
+    #sys.exit()
+    '''
+    model.eval()
+      out = model(data.x)
+      pred = out.argmax(dim=1)  # Use the class with highest probability.
+      test_correct = pred[data.test_mask] == data.y[data.test_mask]  # Check against ground-truth labels.
+      test_acc = int(test_correct.sum()) / int(data.test_mask.sum())  # Derive ratio of correct predictions.
+    '''
 
 
 def train(data, optimizer, model, criterion):
