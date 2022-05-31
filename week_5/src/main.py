@@ -16,6 +16,7 @@ from torch_geometric.utils import to_networkx
 from torch.nn import Linear
 from torch_geometric.nn import GCNConv
 from sklearn.model_selection import KFold
+from sklearn.metrics import average_precision_score, precision_recall_curve
 
 
 font = {'family': 'serif', 'size': 24}
@@ -24,9 +25,9 @@ plt.rc('font', **font)
 local_path = "../week_5/"
 cancer_names = ["blca", "brca", "coad", "hnsc", "ucec"]
 SEED = 32
-n_epo = 500
+n_epo = 100
 k_folds = 5
-batch_size = 200
+batch_size = 250
 num_classes = 2
 gene_dim = 12
 
@@ -59,11 +60,16 @@ def load_node_csv(path, index_col, encoders=None, **kwargs):
     return x, mapping
 
 
-def agg_per_class_acc(pred, data, driver_ids, passenger_ids):
+def agg_per_class_acc(prob_scores, pred, data, driver_ids, passenger_ids):
     dr_tot = 0
     dr_corr = 0
     pass_tot = 0
     pass_corr = 0
+    prob_scores = prob_scores.detach().numpy()
+    dr_prob_scores = prob_scores[driver_ids]
+    pass_prob_scores = prob_scores[passenger_ids]
+    #print(dr_prob_scores, dr_prob_scores.shape)
+    #print(pass_prob_scores, pass_prob_scores.shape)
     for driver_id in driver_ids:
         #print(data.test_mask[driver_id])
         if data.test_mask[driver_id] == torch.tensor(True):
@@ -72,9 +78,18 @@ def agg_per_class_acc(pred, data, driver_ids, passenger_ids):
              #print(driver_id, dr_pred, data.test_mask[driver_id])
              if dr_pred == torch.tensor(1):
                 dr_corr += 1
-
+    dr_label = torch.ones(dr_prob_scores.shape[0])
+    #print(dr_label, dr_prob_scores[:, 1])
+    dr_precision, dr_recall, dr_threshold = precision_recall_curve(dr_label, dr_prob_scores[:, 1], pos_label=1) #dr_prob_scores[:, 1]
+    dr_avg_precision = 0.0 #average_precision_score(dr_label, dr_prob_scores[:, 1], pos_label=1)
+    '''plt.plot(dr_recall, dr_precision)
+    plt.ylabel("Precision")
+    plt.xlabel("Recall")
+    plt.grid(True)
+    plt.title("Driver Precision-Recall")
+    plt.show()'''
     dr_pred_acc = dr_corr / float(dr_tot)
-    #print("Driver prediction: ", dr_pred_acc, dr_corr, dr_tot)
+    print("Driver prediction: ", dr_pred_acc, dr_precision, dr_recall, dr_threshold, dr_avg_precision, dr_corr, dr_tot)
     
 
     for pass_id in passenger_ids:
@@ -86,8 +101,19 @@ def agg_per_class_acc(pred, data, driver_ids, passenger_ids):
              if pass_pred == torch.tensor(0):
                 pass_corr += 1
     pass_pred_acc = pass_corr / float(pass_tot)
-    #print("Passenger prediction: ", pass_pred_acc, pass_corr, pass_tot)
-    return dr_pred_acc, pass_pred_acc
+
+    pass_label = torch.zeros(pass_prob_scores.shape[0])
+    #print(pass_label, pass_prob_scores[:, 0])
+    pass_precision, pass_recall, pass_threshold = precision_recall_curve(pass_label, pass_prob_scores[:, 0], pos_label=0) #pass_prob_scores[:, 0]
+    pass_avg_precision = 0.0 #average_precision_score(pass_label, pass_prob_scores[:, 0], pos_label=0)
+    '''plt.plot(pass_recall, pass_precision)
+    plt.ylabel("Precision")
+    plt.xlabel("Recall")
+    plt.grid(True)
+    plt.title("Passenger Precision-Recall")
+    plt.show()'''
+    print("Passenger prediction: ", pass_pred_acc, pass_precision, pass_recall, pass_threshold, pass_avg_precision, pass_corr, pass_tot)
+    return dr_pred_acc, pass_pred_acc, #dr_prc, pass_prc
 
 
 def read_files():
@@ -236,7 +262,7 @@ def read_files():
             out = model(compact_data.x, compact_data.edge_index)
 
             pred = out[0].argmax(dim=1)  # Use the class with highest probability.
-            dr_cls_acc, pass_cls_acc = agg_per_class_acc(pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
+            dr_cls_acc, pass_cls_acc = agg_per_class_acc(out[0], pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
             dr_cls_acc_fold.append(dr_cls_acc)
             pass_cls_acc_fold.append(pass_cls_acc)
 
@@ -262,7 +288,7 @@ def read_files():
     print()
     print("Training Loss after {} epochs: {}".format(str(n_epo), str(np.mean(tr_loss_epo))))
     print("Test accuracy after {} epochs: {}".format(str(n_epo), str(np.mean(te_acc_epo))))
-    #plot_loss_acc(n_epo, tr_loss_epo, te_acc_epo)
+    plot_loss_acc(n_epo, tr_loss_epo, te_acc_epo)
 
     # predict labels of unlabeled nodes
     '''driver_ids_list = driver_ids_list.reshape((driver_ids_list.shape[0]))
