@@ -26,13 +26,14 @@ plt.rc('font', **font)
 
 local_path = "../week_5/"
 cancer_names = ["blca", "brca", "coad", "hnsc", "ucec"]
+
 SEED = 32
 n_epo = 200
 k_folds = 5
-batch_size = 32
+batch_size = 64
 num_classes = 2
 gene_dim = 12
-n_edges = 10000
+n_edges = 20000
 
 
 class GCN(torch.nn.Module):
@@ -50,8 +51,7 @@ class GCN(torch.nn.Module):
         h = self.conv2(h, edge_index)
         h = h.tanh()
         h = self.conv3(h, edge_index)
-        h = h.tanh()  # Final GNN embedding space.
-        # Apply a final (linear) classifier.
+        h = h.tanh()
         out = self.classifier(h)
         return out, h
 
@@ -68,69 +68,31 @@ def agg_per_class_acc(prob_scores, pred, data, driver_ids, passenger_ids):
     dr_corr = 0
     pass_tot = 0
     pass_corr = 0
+
     prob_scores = prob_scores.detach().numpy()
     dr_prob_scores = prob_scores[driver_ids]
     pass_prob_scores = prob_scores[passenger_ids]
-    #print(dr_prob_scores, dr_prob_scores.shape)
-    #print(pass_prob_scores, pass_prob_scores.shape)
-    #print(driver_ids)
+
     for driver_id in driver_ids:
-        #print(data.test_mask[driver_id])
         if data.test_mask[driver_id] == torch.tensor(True):
              dr_pred = pred[driver_id]
              dr_tot += 1
              if dr_pred == torch.tensor(1):
                 dr_corr += 1
     dr_label = torch.ones(dr_prob_scores.shape[0], dtype=torch.long)
-    #print(dr_label)
-    #dr_label_one_hot = torch.nn.functional.one_hot(dr_label, num_classes=2)
-    #print(dr_label_one_hot)
-    #print(dr_label, dr_prob_scores[:, 1])
-    
-    #dr_precision, dr_recall, dr_threshold = roc_curve(dr_label, dr_prob_scores[:, 1])
-    dr_auc = 0 #roc_auc_score(dr_label_one_hot, dr_prob_scores)
-    dr_avg_precision = dr_auc #average_precision_score(dr_label, dr_prob_scores[:, 1])
     dr_pred_acc = dr_corr / float(dr_tot)
-    print("Driver prediction: ", dr_pred_acc, dr_corr, dr_tot)
-    #print("Driver prediction: ", dr_pred_acc, dr_precision, dr_recall, dr_threshold, dr_avg_precision, dr_corr, dr_tot)
-
-    '''for pass_id in passenger_ids:
-        if data.test_mask[pass_id] == torch.tensor(True):
-             pass_pred = pred[pass_id]
-             pass_tot += 1
-             if pass_pred == torch.tensor(0):
-                pass_corr += 1
-    pass_pred_acc = pass_corr / float(pass_tot)'''
-
+    
     pass_label = torch.zeros(pass_prob_scores.shape[0], dtype=torch.long)
-    #pass_label_one_hot = torch.nn.functional.one_hot(pass_label, num_classes=2)
-    #pass_precision, pass_recall, pass_threshold = precision_recall_curve(pass_label, pass_prob_scores[:, 0])
-    #pass_precision, pass_recall, pass_threshold = roc_curve(pass_label, pass_prob_scores[:, 0])
-    #pass_auc = 0 #roc_auc_score(pass_label_one_hot, pass_prob_scores)
-    #pass_avg_precision = pass_auc #average_precision_score(pass_label, pass_prob_scores[:, 0], pos_label=0)
-    #print("Passenger prediction: ", pass_pred_acc, pass_precision, pass_recall, pass_threshold, pass_avg_precision, pass_corr, pass_tot)
-    #print("Passenger prediction: ", pass_pred_acc, pass_corr, pass_tot)
 
     # combined ROC score
     dr_pass_label = torch.cat((dr_label, pass_label), 0)
-    #print(dr_pass_label.shape, dr_label.shape, pass_label.shape)
-    #print(dr_prob_scores.shape, pass_prob_scores.shape)
     dr_pass_prob_scores = torch.cat((torch.tensor(dr_prob_scores), torch.tensor(pass_prob_scores)), 0)
 
     dr_precision, dr_recall, _ = precision_recall_curve(dr_pass_label, dr_pass_prob_scores[:, 1], pos_label=1)
     dr_fpr, dr_tpr, _ = roc_curve(dr_pass_label, dr_pass_prob_scores[:, 1], pos_label=1)
-    #dr_new_auc = roc_auc_score(dr_pass_label, dr_pass_prob_scores[:, 1])
-    #pass_new_precision, pass_new_recall, _ = roc_curve(dr_pass_label, dr_pass_prob_scores[:, 0], pos_label=0)
-    #pass_new_auc = roc_auc_score(dr_pass_label, dr_pass_prob_scores[:, 0])
-    #print("==========")
-    '''print(dr_new_precision)
-    print(dr_new_recall)
-    print()
-    print(pass_new_precision)
-    print(pass_new_recall)'''
-    #print(dr_new_auc, pass_new_auc)
-    #print("==========")
-    return dr_pred_acc, dr_fpr, dr_tpr, dr_precision, dr_recall
+    dr_roc_auc_score = roc_auc_score(dr_pass_label, dr_pass_prob_scores[:, 1])
+    print("Driver prediction: ", dr_pred_acc, dr_roc_auc_score, dr_corr, dr_tot)
+    return dr_pred_acc, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score
 
 
 def read_files():
@@ -173,7 +135,6 @@ def read_files():
     # replace gene names with ids
     re_links = links.replace({0: mapping})
     re_links = re_links.replace({1: mapping})
-    print(re_links)
     # create data object
     x = x.loc[:, 1:].to_numpy()
     x = torch.tensor(x, dtype=torch.float)
@@ -186,28 +147,26 @@ def read_files():
     print(compact_data)
 
     model = GCN()
+
     print(model)
 
-    criterion = torch.nn.CrossEntropyLoss()  # Define loss criterion.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Define optimizer.
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     print("Replacing gene ids...")
     all_gene_ids = gene_features.replace({0: mapping})
 
-    
     equal_size = int(batch_size / float(num_classes))
     
     driver_ids_list = driver_ids[0].tolist()
     passenger_ids_list = passenger_ids[0].tolist()
-    #driver_ids_list.extend(passenger_ids_list)
     random.shuffle(driver_ids_list)
-
-    #driver_ids_list = np.reshape(driver_ids_list, (len(driver_ids_list), 1))
  
     driver_ids_list = np.reshape(driver_ids_list, (len(driver_ids_list), 1))
     passenger_ids_list = np.reshape(passenger_ids_list, (len(passenger_ids_list), 1))
 
     kfold = KFold(n_splits=k_folds, shuffle=True)
+
     tr_loss_epo = list()
     te_acc_epo = list()
     dr_cls_acc_epo = list()
@@ -217,36 +176,21 @@ def read_files():
     dr_recall_epo = list()
     dr_fpr_epo = list()
     dr_tpr_epo = list()
-
-    pass_prec_epo = list()
-    pass_recall_epo = list()
     
     for epoch in range(n_epo):
         tr_loss_fold = list()
         te_acc_fold = list()
         dr_cls_acc_fold = list()
-        pass_cls_acc_fold = list()
 
         dr_fpr = list()
         dr_tpr = list()
         dr_prec = list()
         dr_recall = list()
-        pass_prec = list()
-        pass_recall = list()
 
         for fold, (dr_tr, pass_tr) in enumerate(zip(kfold.split(driver_ids_list), kfold.split(passenger_ids_list))):
             dr_tr_ids, dr_te_ids = dr_tr
             pass_tr_ids, pass_te_ids = pass_tr
             n_batches = int((len(dr_tr_ids) + len(pass_tr_ids) + 1) / float(batch_size))
-
-            '''tr_genes = driver_ids_list[train_ids]
-            tr_genes = tr_genes.reshape((tr_genes.shape[0]))
-
-            te_genes = driver_ids_list[test_ids]
-            te_genes = te_genes.reshape((te_genes.shape[0]))
-
-            tr_mask = all_gene_ids[0].isin(tr_genes)
-            te_mask = all_gene_ids[0].isin(te_genes)'''
 
             # combine te genes
             dr_te_ids = np.reshape(dr_te_ids, (dr_te_ids.shape[0]))
@@ -263,7 +207,6 @@ def read_files():
             te_mask = all_gene_ids[0].isin(te_genes)
             te_mask = torch.tensor(te_mask, dtype=torch.bool)
 
-            #compact_data.test_mask = None
             compact_data.test_mask = te_mask
 
             batch_tr_loss = list()
@@ -285,46 +228,27 @@ def read_files():
                 batch_dr_tr_genes.extend(batch_pass_tr_genes)
                 tr_mask = all_gene_ids[0].isin(batch_dr_tr_genes)
                 tr_mask = torch.tensor(tr_mask, dtype=torch.bool)
-                ## Reset mask
-                #compact_data.train_mask = None
+
                 compact_data.train_mask = tr_mask
                 tr_loss, h = train(compact_data, optimizer, model, criterion)
                 batch_tr_loss.append(tr_loss.detach().numpy())
             tr_loss_fold.append(np.mean(batch_tr_loss))
+
             # predict on test fold
             model.eval()
             out = model(compact_data.x, compact_data.edge_index)
 
-            '''print(driver_ids[0].tolist(), len(driver_ids[0].tolist()))
-            print()
-            print(driver_ids_list[dr_tr_ids], len(driver_ids_list[dr_tr_ids]))
-            print()
-            print(driver_ids_list[dr_te_ids], len(driver_ids_list[dr_te_ids]))'''
-
-            pred = out[0].argmax(dim=1) #Use the class with highest probability
-            # dr_pred_acc, pass_pred_acc, dr_precision, dr_recall, pass_precision, pass_recall 
-            # TODO: 
-            #dr_cls_acc, pass_cls_acc, dr_prec_fold, dr_rec_fold, pass_prec_fold, pass_rec_fold = agg_per_class_acc(out[0], pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
-            print()
+            pred = out[0].argmax(dim=1)
             test_driver_genes = np.reshape(driver_ids_list[dr_te_ids], (len(driver_ids_list[dr_te_ids]))).tolist()
             test_passenger_genes = np.reshape(passenger_ids_list[pass_te_ids], (len(passenger_ids_list[pass_te_ids]))).tolist()
-            dr_cls_acc, dr_fpr_fold, dr_tpr_fold, dr_prec_fold, dr_rec_fold = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
+            dr_cls_acc, dr_fpr_fold, dr_tpr_fold, dr_prec_fold, dr_rec_fold, _ = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
 
-            '''dr_fpr.append(dr_fpr_fold)
-            dr_tpr.append(dr_tpr_fold)
-            dr_prec.append(dr_prec_fold)
-            dr_recall.append(dr_rec_fold)'''
- 
             dr_fpr = dr_fpr_fold
             dr_tpr = dr_tpr_fold
             dr_prec = dr_prec_fold
             dr_recall = dr_rec_fold
 
-            #pass_prec.append(pass_prec_fold)
-            #pass_recall.append(pass_rec_fold)
-
             dr_cls_acc_fold.append(dr_cls_acc)
-            #pass_cls_acc_fold.append(pass_cls_acc)
 
             test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]  #Check against ground-truth labels.
 
@@ -339,18 +263,6 @@ def read_files():
         te_acc_epo.append(np.mean(te_acc_fold))
 
         dr_cls_acc_epo.append(np.mean(dr_cls_acc_fold))
-        #pass_cls_acc_epo.append(np.mean(pass_cls_acc_fold))
-
-        #print(np.array(dr_prec).shape, np.mean(np.array(dr_prec), axis=0).shape)
-        #print(pass_prec)
-        #print(np.array(pass_prec), np.array(pass_prec).shape)
-        #print(np.mean(np.array(pass_prec).shape, axis=0))
-
-        '''dr_fpr_epo.append(np.mean(np.array(dr_fpr), axis=0))
-        dr_tpr_epo.append(np.mean(np.array(dr_tpr), axis=0))
-
-        dr_prec_epo.append(np.mean(np.array(dr_prec), axis=0))
-        dr_recall_epo.append(np.mean(np.array(dr_recall), axis=0))'''
 
         dr_fpr_epo = dr_fpr
         dr_tpr_epo = dr_tpr
@@ -358,82 +270,29 @@ def read_files():
         dr_prec_epo = dr_prec
         dr_recall_epo = dr_recall
 
-        #dr_prec_epo = dr_prec
-        #dr_recall_epo = dr_recall
-        #pass_prec_epo.append(np.mean(np.array(pass_prec), axis=0))
-        #pass_recall_epo.append(np.mean(np.array(pass_recall), axis=0))
-
         print()
         print("Training Loss after {} epochs: {}".format(str(epoch+1), str(np.mean(tr_loss_fold))))
         print("Test accuracy after {} epochs: {}".format(str(epoch+1), str(np.mean(te_acc_fold))))
         print("After {} epochs, test per class accuracy, Driver: {}".format(str(epoch+1), str(np.mean(dr_cls_acc_epo))))
         print()
 
-    '''dr_prec_epo = np.mean(np.array(dr_prec_epo), axis=0)
-    dr_recall_epo = np.mean(np.array(dr_recall_epo), axis=0)
-    fpr_epo = np.mean(np.array(dr_fpr_epo), axis=0)
-    tpr_epo = np.mean(np.array(dr_tpr_epo), axis=0)'''
-
     dr_prec_epo = dr_prec_epo
     dr_recall_epo = dr_recall_epo
     fpr_epo = dr_fpr_epo
     tpr_epo = dr_tpr_epo
+
+    model.eval()
+    dr_out = model(compact_data.x, compact_data.edge_index)
+    dr_pred = out[0].argmax(dim=1)
+    dr_com_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score =  agg_per_class_acc(dr_out[0], dr_pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
+    plot_dr_prec_recall(dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score)
     
-    #dr_prec_epo = dr_prec_epo #np.mean(np.array(), axis=0)
-    #dr_recall_epo = dr_recall_epo #np.mean(np.array(), axis=0)
-    #pass_prec_epo = np.mean(np.array(pass_prec_epo), axis=0)
-    #pass_recall_epo = np.mean(np.array(pass_recall_epo), axis=0)
-    print(dr_prec_epo)
-    print(dr_recall_epo)
-    print()
     print("Training Loss after {} epochs: {}".format(str(n_epo), str(np.mean(tr_loss_epo))))
     print("Test accuracy after {} epochs: {}".format(str(n_epo), str(np.mean(te_acc_epo))))
-    #plot_loss_acc(n_epo, tr_loss_epo, te_acc_epo)
-    plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, n_epo, dr_cls_acc_epo)
+    plot_loss_acc(n_epo, tr_loss_epo, dr_cls_acc_epo)
 
     # predict labels of unlabeled nodes
-    '''driver_ids_list = driver_ids_list.reshape((driver_ids_list.shape[0]))
-    final_tr_mask = all_gene_ids[0].isin(driver_ids_list)
-    final_te_mask = not final_tr_mask.all()
-    compact_data.test_mask = final_te_mask
-    model.eval()
-    out = model(compact_data.x, compact_data.edge_index)
-    pred = out[0].argmax(dim=1) # Use the class with highest probability.
-    print(out[0], pred, pred.shape)'''
-
-
-def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, n_epo, dr_cls_acc_epo):
-    #dr_recall_epo = sorted(dr_recall_epo, reverse=True)
-    plt.plot(dr_recall_epo, dr_prec_epo)
-    plt.ylabel("Precision")
-    plt.xlabel("Recall")
-    plt.grid(True)
-    plt.title("Driver prediction Precision-Recall curve")
-    plt.show()
-
-    #print(fpr_epo)
-    #print(tpr_epo)
-    #print(dr_prec_epo)
-    #print(dr_recall_epo)
-
-    roc_auc = sklearn.metrics.auc(fpr_epo, tpr_epo)
-    roc_display = RocCurveDisplay(fpr=dr_prec_epo, tpr=dr_recall_epo, roc_auc=roc_auc).plot()
-    plt.title("ROC: true positive rate vs false positive rate")
-    plt.show()
-    
-    roc_auc_prc = sklearn.metrics.auc(dr_prec_epo, dr_recall_epo)
-    print("Precision-recall AUC: {}".format(roc_auc_prc))
-    #pr_display = PrecisionRecallDisplay(precision=dr_prec_epo, recall=dr_recall_epo).plot()
-    #plt.title("Precision-Recall curve")
-    #plt.show()
-
-    '''x_val = np.arange(n_epo)
-    plt.plot(x_val, dr_cls_acc_epo)
-    plt.ylabel("Driver prediction precision")
-    plt.xlabel("Epochs")
-    plt.grid(True)
-    plt.title("Driver prediction precision vs epochs")
-    plt.show()'''
+    # TODO:
 
 
 def train(data, optimizer, model, criterion):
@@ -445,47 +304,39 @@ def train(data, optimizer, model, criterion):
     return loss, h
 
 
+def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, dr_roc_auc_score):
+    plt.plot(dr_recall_epo, dr_prec_epo)
+    plt.ylabel("Precision")
+    plt.xlabel("Recall")
+    plt.grid(True)
+    plt.title("Driver prediction Precision-Recall curve (for all drivers), ROC AUC: {}".format(str(np.round(dr_roc_auc_score, 3))))
+    plt.show()
+
+    roc_auc = sklearn.metrics.auc(fpr_epo, tpr_epo)
+    roc_display = RocCurveDisplay(fpr=fpr_epo, tpr=tpr_epo, roc_auc=roc_auc).plot()
+    plt.title("ROC: true positive rate vs false positive rate (for all drivers)")
+    plt.show()
+
+
 def plot_loss_acc(n_epo, tr_loss, te_acc):
+    # plot training loss
     x_val = np.arange(n_epo)
     plt.plot(x_val, tr_loss)
-    plt.ylabel("Training loss")
+    plt.ylabel("Loss")
     plt.xlabel("Epochs")
     plt.grid(True)
-    plt.title("Training loss vs epochs")
+    plt.title("{} fold CV training loss vs epochs".format(str(k_folds)))
     plt.show()
     
+    # plot driver gene precision vs epochs
+    x_val = np.arange(n_epo)
     plt.plot(x_val, te_acc)
-    plt.ylabel("Test accuracy")
+    plt.ylabel("Precision")
     plt.xlabel("Epochs")
     plt.grid(True)
-    plt.title("Test accuracy vs epochs")
+    plt.title("{} fold CV Precision: Driver prediction vs epochs".format(str(k_folds)))
     plt.show()
 
 
 if __name__ == "__main__":
-    '''from sklearn.datasets import fetch_openml
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.pipeline import make_pipeline
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import train_test_split
-
-    X, y = fetch_openml(data_id=1464, return_X_y=True)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y)
-
-    clf = make_pipeline(StandardScaler(), LogisticRegression(random_state=0))
-    clf.fit(X_train, y_train)
-
-    from sklearn.metrics import roc_curve
-    from sklearn.metrics import RocCurveDisplay
-
-    y_score = clf.decision_function(X_test)
-    print(y_test)
-    print(y_score)
-
-    fpr, tpr, _ = roc_curve(y_test, y_score, pos_label=clf.classes_[1])
-    print(fpr)
-    print(tpr)
-    roc_display = RocCurveDisplay(fpr=fpr, tpr=tpr).plot()
-    plt.show()'''
-
     read_files()
