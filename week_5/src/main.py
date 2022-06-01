@@ -91,7 +91,9 @@ def agg_per_class_acc(prob_scores, pred, data, driver_ids, passenger_ids):
     dr_precision, dr_recall, _ = precision_recall_curve(dr_pass_label, dr_pass_prob_scores[:, 1], pos_label=1)
     dr_fpr, dr_tpr, _ = roc_curve(dr_pass_label, dr_pass_prob_scores[:, 1], pos_label=1)
     dr_roc_auc_score = roc_auc_score(dr_pass_label, dr_pass_prob_scores[:, 1])
-    print("Driver prediction: ", dr_pred_acc, dr_roc_auc_score, dr_corr, dr_tot)
+    
+    print("Driver prediction: Precision {}, # correctly predicted/total samples {}/{}".format(dr_pred_acc, dr_corr, dr_tot))
+    print()
     return dr_pred_acc, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score
 
 
@@ -253,9 +255,9 @@ def read_files():
             test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]  #Check against ground-truth labels.
 
             test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())  #Derive ratio of correct predictions.
-            print("Epoch {}, fold {}/{} average training loss: {}".format(str(epoch+1), str(fold+1), str(k_folds), str(np.mean(batch_tr_loss))))
-            print("Epoch: {}, Fold: {}/{}, test accuracy: {}".format(str(epoch+1), str(fold+1), str(k_folds), str(test_acc)))
-            print("Epoch: {}, Fold: {}/{}, test per class accuracy, Driver: {}".format(str(epoch+1), str(fold+1), str(k_folds), str(dr_cls_acc)))
+            print("Epoch {}/{}, fold {}/{} average training loss: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(np.mean(batch_tr_loss))))
+            print("Epoch: {}/{}, Fold: {}/{}, test accuracy: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(test_acc)))
+            print("Epoch: {}/{}, Fold: {}/{}, test per class accuracy, Driver: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(dr_cls_acc)))
             te_acc_fold.append(test_acc)
 
         print("-------------------")
@@ -309,7 +311,7 @@ def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, dr_roc_auc
     plt.ylabel("Precision")
     plt.xlabel("Recall")
     plt.grid(True)
-    plt.title("Driver prediction Precision-Recall curve (for all drivers), ROC AUC: {}".format(str(np.round(dr_roc_auc_score, 3))))
+    plt.title("Driver prediction Precision-Recall curve (for all drivers), ROC AUC: {}".format(str(np.round(dr_roc_auc_score, 2))))
     plt.show()
 
     roc_auc = sklearn.metrics.auc(fpr_epo, tpr_epo)
