@@ -26,14 +26,14 @@ plt.rc('font', **font)
 
 local_path = "../week_5/"
 cancer_names = ["blca", "brca", "coad", "hnsc", "ucec"]
-
+cancer_type = cancer_names[0]
 SEED = 32
-n_epo = 200
+n_epo = 10
 k_folds = 5
 batch_size = 64
 num_classes = 2
 gene_dim = 12
-n_edges = 20000
+n_edges = 1000
 
 
 class GCN(torch.nn.Module):
@@ -99,7 +99,7 @@ def agg_per_class_acc(prob_scores, pred, data, driver_ids, passenger_ids):
 
 def read_files():
     #print(torch.tensor(False))
-    final_path = cancer_names[0] + "/"
+    final_path = cancer_type + "/"
     driver = pd.read_csv(final_path + "drivers", header=None)
     gene_features = pd.read_csv(final_path + "gene_features", header=None)
     links = pd.read_csv(final_path + "links", header=None)
@@ -162,8 +162,10 @@ def read_files():
     
     driver_ids_list = driver_ids[0].tolist()
     passenger_ids_list = passenger_ids[0].tolist()
+
     random.shuffle(driver_ids_list)
- 
+    random.shuffle(passenger_ids_list)
+
     driver_ids_list = np.reshape(driver_ids_list, (len(driver_ids_list), 1))
     passenger_ids_list = np.reshape(passenger_ids_list, (len(passenger_ids_list), 1))
 
@@ -172,8 +174,6 @@ def read_files():
     tr_loss_epo = list()
     te_acc_epo = list()
     dr_cls_acc_epo = list()
-    pass_cls_acc_epo = list()
-
     dr_prec_epo = list()
     dr_recall_epo = list()
     dr_fpr_epo = list()
@@ -217,6 +217,7 @@ def read_files():
                 random.shuffle(pass_tr_ids)
                 batch_dr_tr_genes = driver_ids_list[dr_tr_ids]
                 batch_dr_tr_genes = list(batch_dr_tr_genes.reshape((batch_dr_tr_genes.shape[0])))
+                # balance train batches for both classes
                 if len(batch_dr_tr_genes) < equal_size:
                     batch_dr_tr_genes = list(np.random.choice(batch_dr_tr_genes, size=equal_size))
                 else:
@@ -243,18 +244,12 @@ def read_files():
             pred = out[0].argmax(dim=1)
             test_driver_genes = np.reshape(driver_ids_list[dr_te_ids], (len(driver_ids_list[dr_te_ids]))).tolist()
             test_passenger_genes = np.reshape(passenger_ids_list[pass_te_ids], (len(passenger_ids_list[pass_te_ids]))).tolist()
-            dr_cls_acc, dr_fpr_fold, dr_tpr_fold, dr_prec_fold, dr_rec_fold, _ = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
-
-            dr_fpr = dr_fpr_fold
-            dr_tpr = dr_tpr_fold
-            dr_prec = dr_prec_fold
-            dr_recall = dr_rec_fold
-
+            dr_cls_acc, _, _, _, _, _ = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
             dr_cls_acc_fold.append(dr_cls_acc)
 
             test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]  #Check against ground-truth labels.
 
-            test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())  #Derive ratio of correct predictions.
+            test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum()) #Derive ratio of correct predictions.
             print("Epoch {}/{}, fold {}/{} average training loss: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(np.mean(batch_tr_loss))))
             print("Epoch: {}/{}, Fold: {}/{}, test accuracy: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(test_acc)))
             print("Epoch: {}/{}, Fold: {}/{}, test per class accuracy, Driver: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(dr_cls_acc)))
@@ -266,31 +261,27 @@ def read_files():
 
         dr_cls_acc_epo.append(np.mean(dr_cls_acc_fold))
 
-        dr_fpr_epo = dr_fpr
-        dr_tpr_epo = dr_tpr
-
-        dr_prec_epo = dr_prec
-        dr_recall_epo = dr_recall
-
         print()
-        print("Training Loss after {} epochs: {}".format(str(epoch+1), str(np.mean(tr_loss_fold))))
-        print("Test accuracy after {} epochs: {}".format(str(epoch+1), str(np.mean(te_acc_fold))))
-        print("After {} epochs, test per class accuracy, Driver: {}".format(str(epoch+1), str(np.mean(dr_cls_acc_epo))))
+        print("Epoch {}: Training Loss: {}".format(str(epoch+1), str(np.mean(tr_loss_fold))))
+        print("Epoch {}: Test accuracy: {}".format(str(epoch+1), str(np.mean(te_acc_fold))))
+        print("Epoch {}: Test per class accuracy, Driver: {}".format(str(epoch+1), str(np.mean(dr_cls_acc_fold))))
         print()
 
-    dr_prec_epo = dr_prec_epo
-    dr_recall_epo = dr_recall_epo
-    fpr_epo = dr_fpr_epo
-    tpr_epo = dr_tpr_epo
+    dr_genes = driver_ids[0].tolist()
+    pass_genes = passenger_ids[0].tolist()
+    dr_genes.extend(pass_genes)
+    dr_pass_te_mask = all_gene_ids[0].isin(dr_genes)
+    dr_pass_te_mask = torch.tensor(dr_pass_te_mask, dtype=torch.bool)
+    compact_data.test_mask = dr_pass_te_mask
 
     model.eval()
     dr_out = model(compact_data.x, compact_data.edge_index)
-    dr_pred = out[0].argmax(dim=1)
-    dr_com_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score =  agg_per_class_acc(dr_out[0], dr_pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
+    dr_pred = dr_out[0].argmax(dim=1)
+    dr_com_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score = agg_per_class_acc(dr_out[0], dr_pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
     plot_dr_prec_recall(dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score)
     
-    print("Training Loss after {} epochs: {}".format(str(n_epo), str(np.mean(tr_loss_epo))))
-    print("Test accuracy after {} epochs: {}".format(str(n_epo), str(np.mean(te_acc_epo))))
+    print("CV Training Loss after {} epochs: {}".format(str(n_epo), str(np.mean(tr_loss_epo))))
+    print("CV Test driver accuracy after {} epochs: {}".format(str(n_epo), str(np.mean(dr_cls_acc_epo))))
     plot_loss_acc(n_epo, tr_loss_epo, dr_cls_acc_epo)
 
     # predict labels of unlabeled nodes
@@ -307,16 +298,16 @@ def train(data, optimizer, model, criterion):
 
 
 def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, dr_roc_auc_score):
-    plt.plot(dr_recall_epo, dr_prec_epo)
-    plt.ylabel("Precision")
-    plt.xlabel("Recall")
+
+    disp = PrecisionRecallDisplay(precision=dr_prec_epo, recall=dr_recall_epo, pos_label="Driver").plot()
+    plt.title("Cancer {}, Driver prediction Precision-Recall (for all drivers), ROC AUC: {}".format(cancer_type, str(np.round(dr_roc_auc_score, 2))))
     plt.grid(True)
-    plt.title("Driver prediction Precision-Recall curve (for all drivers), ROC AUC: {}".format(str(np.round(dr_roc_auc_score, 2))))
     plt.show()
 
     roc_auc = sklearn.metrics.auc(fpr_epo, tpr_epo)
     roc_display = RocCurveDisplay(fpr=fpr_epo, tpr=tpr_epo, roc_auc=roc_auc).plot()
-    plt.title("ROC: true positive rate vs false positive rate (for all drivers)")
+    plt.title("Cancer {}, ROC curve (for all drivers)".format(cancer_type))
+    plt.grid(True)
     plt.show()
 
 
@@ -327,16 +318,16 @@ def plot_loss_acc(n_epo, tr_loss, te_acc):
     plt.ylabel("Loss")
     plt.xlabel("Epochs")
     plt.grid(True)
-    plt.title("{} fold CV training loss vs epochs".format(str(k_folds)))
+    plt.title("Cancer {}, {} fold CV training loss vs epochs".format(cancer_type, str(k_folds)))
     plt.show()
-    
+
     # plot driver gene precision vs epochs
     x_val = np.arange(n_epo)
     plt.plot(x_val, te_acc)
     plt.ylabel("Precision")
     plt.xlabel("Epochs")
     plt.grid(True)
-    plt.title("{} fold CV Precision: Driver prediction vs epochs".format(str(k_folds)))
+    plt.title("Cancer {}, {} fold CV Precision: Driver prediction vs epochs".format(cancer_type, str(k_folds)))
     plt.show()
 
 
