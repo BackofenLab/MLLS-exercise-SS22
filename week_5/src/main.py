@@ -29,13 +29,13 @@ cancer_type = cancer_names[0]
 
 # neural network parameters
 SEED = 32
-n_epo = 20
+n_epo = 50
 k_folds = 5
 batch_size = 64
 num_classes = 2
 gene_dim = 12
 learning_rate = 0.001
-n_edges = 10000
+n_edges = 200000
 
 
 class GCN(torch.nn.Module):
