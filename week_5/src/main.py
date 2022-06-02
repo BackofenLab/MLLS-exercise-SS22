@@ -29,13 +29,13 @@ cancer_type = cancer_names[0]
 
 # neural network parameters
 SEED = 32
-n_epo = 50
+n_epo = 20
 k_folds = 5
 batch_size = 64
 num_classes = 2
 gene_dim = 12
 learning_rate = 0.001
-n_edges = 200000
+n_edges = 1000
 
 
 class GCN(torch.nn.Module):
@@ -155,7 +155,6 @@ def read_files():
     x = torch.tensor(x, dtype=torch.float)
     edge_index = torch.tensor(re_links.to_numpy(), dtype=torch.long)
     compact_data = Data(x=x, edge_index=edge_index.t().contiguous())
-
     driver_gene_list.extend(passenger_gene_list)
     compact_data.y = y
 
@@ -262,19 +261,22 @@ def create_training_proc(compact_data, driver_ids, passenger_ids, gene_features,
                 batch_tr_loss.append(tr_loss.detach().numpy())
             tr_loss_fold.append(np.mean(batch_tr_loss))
 
-            # predict on test fold
-            model.eval()
-            out = model(compact_data.x, compact_data.edge_index)
-            pred = out[0].argmax(dim=1)
+            '''model.eval()
+			out = model(compact_data.x, compact_data.edge_index)
+			pred = out[0].argmax(dim=1)
+			test_driver_genes = np.reshape(driver_ids_list[dr_te_ids], (len(driver_ids_list[dr_te_ids]))).tolist()
+			test_passenger_genes = np.reshape(passenger_ids_list[pass_te_ids], (len(passenger_ids_list[pass_te_ids]))).tolist()
+			# get precision for driver genes in test fold
+			dr_cls_acc, _, _, _, _, _ = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
+			dr_cls_acc_fold.append(dr_cls_acc)'''
             test_driver_genes = np.reshape(driver_ids_list[dr_te_ids], (len(driver_ids_list[dr_te_ids]))).tolist()
             test_passenger_genes = np.reshape(passenger_ids_list[pass_te_ids], (len(passenger_ids_list[pass_te_ids]))).tolist()
-            # get precision for driver genes in test fold
-            dr_cls_acc, _, _, _, _, _ = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
+            dr_cls_acc, test_acc, _, _, _, _, _ = predict_data(model, compact_data, test_driver_genes, test_passenger_genes)
             dr_cls_acc_fold.append(dr_cls_acc)
 
             # get overall accuracy for both classes
-            test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]
-            test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())
+            #test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]
+            #test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())
             print("Epoch {}/{}, fold {}/{} average training loss: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(np.mean(batch_tr_loss))))
             print("Epoch: {}/{}, Fold: {}/{}, test accuracy: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(test_acc)))
             print("Epoch: {}/{}, Fold: {}/{}, test per class accuracy, Driver: {}".format(str(epoch+1), str(n_epo), str(fold+1), str(k_folds), str(dr_cls_acc)))
@@ -299,18 +301,38 @@ def create_training_proc(compact_data, driver_ids, passenger_ids, gene_features,
     # prepare test mask using all driver genes (# of driver genes are less)
     compact_data.test_mask = dr_pass_te_mask
     # compute accuracy on all driver genes using trained model
-    model.eval()
+    '''model.eval()
     dr_out = model(compact_data.x, compact_data.edge_index)
     dr_pred = dr_out[0].argmax(dim=1)
-    dr_com_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score = agg_per_class_acc(dr_out[0], dr_pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
-    plot_dr_prec_recall(dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score)
-    
+    dr_com_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score = agg_per_class_acc(dr_out[0], dr_pred, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())'''
+    dr_com_acc, te_acc, dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score = predict_data(model, compact_data, driver_ids[0].tolist(), passenger_ids[0].tolist())
+
     print("CV Training Loss after {} epochs: {}".format(str(n_epo), str(np.mean(tr_loss_epo))))
     print("CV Test driver accuracy after {} epochs: {}".format(str(n_epo), str(np.mean(dr_cls_acc_epo))))
+     
+    # create plots
+    plot_dr_prec_recall(dr_com_fpr, dr_com_tpr, dr_com_prec, dr_com_rec, dr_roc_auc_score)
     plot_loss_acc(n_epo, tr_loss_epo, dr_cls_acc_epo)
 
     # predict labels of unlabeled nodes
     # TODO:
+
+
+#def create_masks(data, dr_genes, pass_genes, train_test):
+    
+
+def predict_data(model, compact_data, test_driver_genes, test_passenger_genes):
+    # predict on test fold
+    model.eval()
+    out = model(compact_data.x, compact_data.edge_index)
+    pred = out[0].argmax(dim=1)
+    #test_driver_genes = np.reshape(driver_ids_list[dr_te_ids], (len(driver_ids_list[dr_te_ids]))).tolist()
+    #test_passenger_genes = np.reshape(passenger_ids_list[pass_te_ids], (len(passenger_ids_list[pass_te_ids]))).tolist()
+    # get precision for driver genes in test fold
+    test_correct = pred[compact_data.test_mask] == compact_data.y[compact_data.test_mask]
+    test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())
+    dr_cls_acc, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
+    return dr_cls_acc, test_acc, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score
 
 
 def train(data, optimizer, model, criterion):
@@ -330,9 +352,9 @@ def train(data, optimizer, model, criterion):
     return loss, h
 
 
-############# 
+########################
 # Plotting methods
-############
+########################
 def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, dr_roc_auc_score):
 
     # plot precision, recall curve
