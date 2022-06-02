@@ -96,7 +96,7 @@ clf.fit(X_train, y_train)
 
 c_split_lists = [clf.cv_results_["mean_test_score"][x:x+4] for x in range(0, len(clf.cv_results_["mean_test_score"]), 4)]
 x_tick_labels = ['1', '5', '10' , '50']
-box_plot(c_split_lists, x_tick_labels)
+#box_plot(c_split_lists, x_tick_labels)
 
 
 
