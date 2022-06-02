@@ -17,8 +17,8 @@ from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay, roc_
 
 
 # matplotlib settings
-font = {'family': 'serif', 'size': 24}
-plt.rc('font', **font)
+#font = {'family': 'serif', 'size': 20}
+#plt.rc('font', **font)
 
 # data path
 local_path = "../week_5/"
@@ -29,13 +29,13 @@ cancer_type = cancer_names[0]
 
 # neural network parameters
 SEED = 32
-n_epo = 20
+n_epo = 50
 k_folds = 5
-batch_size = 64
+batch_size = 32
 num_classes = 2
 gene_dim = 12
 learning_rate = 0.001
-n_edges = 20000
+n_edges = 267186
 
 
 class GCN(torch.nn.Module):
@@ -370,15 +370,17 @@ def plot_dr_prec_recall(fpr_epo, tpr_epo, dr_prec_epo, dr_recall_epo, dr_roc_auc
 
     # plot precision, recall curve
     disp = PrecisionRecallDisplay(precision=dr_prec_epo, recall=dr_recall_epo, pos_label="Driver").plot()
-    plt.title("Cancer {}, Driver prediction Precision-Recall (for all drivers), AUPRC: {}".format(cancer_type, str(np.round(auprc_wt, 2))))
+    plt.title("Cancer {}, Precision-Recall curve (all drivers), AUPRC: {}".format(cancer_type, str(np.round(auprc_wt, 2))))
     plt.grid(True)
+    plt.savefig("plots/cancer_{}_prc_all_drivers_links_{}_epo_{}.pdf".format(cancer_type, n_edges, n_epo), dpi=200)
     plt.show()
 
     # plot ROC
     roc_auc = sklearn.metrics.auc(fpr_epo, tpr_epo)
     roc_display = RocCurveDisplay(fpr=fpr_epo, tpr=tpr_epo, roc_auc=roc_auc).plot()
-    plt.title("Cancer {}, AUC ROC curve (for all drivers)".format(cancer_type))
+    plt.title("Cancer {}, ROC curve (all drivers)".format(cancer_type))
     plt.grid(True)
+    plt.savefig("plots/cancer_{}_roc_all_drivers_links_{}_epo_{}.pdf".format(cancer_type, n_edges, n_epo), dpi=200)
     plt.show()
 
 
@@ -390,7 +392,9 @@ def plot_loss_acc(n_epo, tr_loss, te_acc):
     plt.xlabel("Epochs")
     plt.grid(True)
     plt.title("Cancer {}, {} fold CV training loss vs epochs".format(cancer_type, str(k_folds)))
+    plt.savefig("plots/cancer_{}_{}_fold_CV_driver_training_loss_links_{}_epo_{}.pdf".format(cancer_type, k_folds, n_edges, n_epo), dpi=200)
     plt.show()
+
 
     # plot driver gene precision vs epochs
     x_val = np.arange(n_epo)
@@ -398,7 +402,8 @@ def plot_loss_acc(n_epo, tr_loss, te_acc):
     plt.ylabel("Accuracy")
     plt.xlabel("Epochs")
     plt.grid(True)
-    plt.title("Cancer {}, {} fold CV Driver prediction accuracy vs epochs".format(cancer_type, str(k_folds)))
+    plt.title("Cancer {}, {} fold CV Driver pred accuracy vs epochs".format(cancer_type, str(k_folds)))
+    plt.savefig("plots/cancer_{}_{}_fold_CV_driver_test_accuracy_links_{}_epo_{}.pdf".format(cancer_type, k_folds, n_edges, n_epo), dpi=200)
     plt.show()
 
 
