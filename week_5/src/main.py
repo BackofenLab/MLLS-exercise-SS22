@@ -345,6 +345,8 @@ def get_top_genes(model, compact_data, test_driver_genes, top_genes=10):
                  corr_driver_genes[driver_id] = out[0][:, 1][driver_id].detach().numpy()
     s_top_genes = {k: v for k, v in sorted(corr_driver_genes.items(), key=lambda item: item[1], reverse=True)}
     print("Top 10 Driver genes: ", list(s_top_genes.keys())[:top_genes])
+    # [2609, 3501, 11659, 2641, 8759, 2502, 9911, 10645, 9067, 7315]
+    # 2609: "CTNNB1". More details: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6354055/#:~:text=Mutations%20in%20the%20%CE%B2%2Dcatenin,status%20of%20cancer%2Drelated%20genes.
     print("Find these ids in the gene_mapping.json file")
     
 
