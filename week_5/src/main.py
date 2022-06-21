@@ -82,34 +82,32 @@ def read_files():
 
     driver_gene_list = driver[0].tolist()
     passenger_gene_list = passengers[0].tolist()
-    
+
     x, mapping = load_node_csv(final_path + "gene_features", 0)
     y = torch.zeros(x.shape[0], dtype=torch.long)
     # assign all labels to -1
     y[:] = -1
     driver_ids = driver.replace({0: mapping})
     passenger_ids = passengers.replace({0: mapping})
+
     # driver = 1, passenger = 0
     y[driver_ids[0].tolist()] = 1
     y[passenger_ids[0].tolist()] = 0
 
     print("Saving mapping...")
-    with open('gene_mapping.json', 'w') as outfile:
-        outfile.write(json.dumps(mapping))
+    save_mapping_json(mapping)
 
     print("replacing gene ids")
     # set number of edges
     links = links[:n_edges]
-    # replace gene names with ids
+    # replace gene names with ids, only the first two columns
     re_links = links.replace({0: mapping})
     re_links = re_links.replace({1: mapping})
     # create data object
-    x = x.loc[:, 1:].to_numpy()
-    x = torch.tensor(x, dtype=torch.float)
+    x = torch.tensor(x.loc[:, 1:].to_numpy(), dtype=torch.float)
     edge_index = torch.tensor(re_links.to_numpy(), dtype=torch.long)
     # set up Pytorch geometric dataset
     compact_data = Data(x=x, edge_index=edge_index.t().contiguous())
-    driver_gene_list.extend(passenger_gene_list)
     # set up true labels
     compact_data.y = y
     return compact_data, driver_ids, passenger_ids, gene_features, mapping
@@ -158,7 +156,6 @@ def create_training_proc(compact_data, driver_ids, passenger_ids, gene_features,
         tr_loss_fold = list()
         te_acc_fold = list()
         dr_cls_acc_fold = list()
-
         dr_fpr = list()
         dr_tpr = list()
         dr_prec = list()
@@ -326,6 +323,11 @@ def predict_data(model, compact_data, test_driver_genes, test_passenger_genes):
     test_acc = int(test_correct.sum()) / int(compact_data.test_mask.sum())
     dr_cls_acc, auprc_wt, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score = agg_per_class_acc(out[0], pred, compact_data, test_driver_genes, test_passenger_genes)
     return dr_cls_acc, auprc_wt, test_acc, dr_fpr, dr_tpr, dr_precision, dr_recall, dr_roc_auc_score
+
+
+def save_mapping_json(mapping_file):
+    with open('gene_mapping.json', 'w') as outfile:
+        outfile.write(json.dumps(mapping_file))
 
 
 def get_top_genes(model, compact_data, test_driver_genes, top_genes=10):
