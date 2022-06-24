@@ -25,6 +25,9 @@ local_path = "../week_5/"
 
 # data parameters
 cancer_names = ["blca", "brca", "coad", "hnsc", "ucec"]
+'''
+BCLA: 
+'''
 cancer_type = cancer_names[0]
 
 # neural network parameters
@@ -45,10 +48,11 @@ class GCN(torch.nn.Module):
     def __init__(self):
         super().__init__()
         torch.manual_seed(SEED)
-        self.conv1 = GCNConv(gene_dim, 4)
-        self.conv2 = GCNConv(4, 4)
-        self.conv3 = GCNConv(4, 2)
-        self.classifier = Linear(2, num_classes)
+        self.conv1 = GCNConv(gene_dim, 64)
+        self.conv2 = GCNConv(64, 32)
+        self.conv3 = GCNConv(32, 16) 
+        self.conv4 = GCNConv(16, 8)
+        self.classifier = Linear(8, num_classes)
 
     def forward(self, x, edge_index):
         h = self.conv1(x, edge_index)
@@ -56,6 +60,8 @@ class GCN(torch.nn.Module):
         h = self.conv2(h, edge_index)
         h = h.tanh()
         h = self.conv3(h, edge_index)
+        h = h.tanh()
+        h = self.conv4(h, edge_index)
         h = h.tanh()
         out = self.classifier(h)
         return out, h
