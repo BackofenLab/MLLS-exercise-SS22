@@ -107,7 +107,7 @@ def merge_pos_neg(pos_seqs, neg_seqs):
     neg_df = read_seqs(neg_seqs, 0)
     merged_df = pd.concat([pos_df, neg_df])
     merged_df = merged_df.sample(frac=1).reset_index(drop=True)
-    merged_df.to_csv("../data/pos_neg_data.csv", sep=",", index=None)
+    merged_df.to_csv("../data/train.tsv", sep="\t", index=None)
     print(merged_df)
 
 
