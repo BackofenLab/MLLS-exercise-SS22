@@ -98,7 +98,7 @@ def read_seqs(seq_dict, label, k=6, columns=["sequence", "label"]):
     return dataframe
 
 
-def merge_pos_neg(pos_seqs, neg_seqs):
+def merge_pos_neg(pos_seqs, neg_seqs, test_train=0.8):
     """
     Merge positive and negative sequences into one file
     Divide into train and test
@@ -107,8 +107,16 @@ def merge_pos_neg(pos_seqs, neg_seqs):
     neg_df = read_seqs(neg_seqs, 0)
     merged_df = pd.concat([pos_df, neg_df])
     merged_df = merged_df.sample(frac=1).reset_index(drop=True)
-    merged_df.to_csv("../data/train.tsv", sep="\t", index=None)
+    split_pos = int(test_train * len(merged_df.index))
+    train = merged_df[:split_pos]
+    test = merged_df.drop(train.index)
+    train.to_csv("../data/train.tsv", sep="\t", index=None)
+    test.to_csv("../data/dev.tsv", sep="\t", index=None)
     print(merged_df)
+    print()
+    print(train)
+    print()
+    print(test)
 
 
 ################################################################################
