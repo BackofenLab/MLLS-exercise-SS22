@@ -25,7 +25,7 @@ batch_size = 32
 hidden_dim = 100
 n_layers = 2
 learning_rate = 2e-4 # 0.001
-n_epochs = 5
+n_epochs = 20
 dropout = 0.1
 embedding_dim = 128
 bidirectional = True
@@ -88,6 +88,7 @@ def convert_seq_2_integers(dataframe, r_dict):
 def train_model(X_train, y_train, X_test, y_test):
 
     model = RNNSeqClassifier()
+    print(model)
 
     X_train = torch.tensor(X_train, dtype=torch.long)
     y_train = torch.tensor(y_train, dtype=torch.long)
