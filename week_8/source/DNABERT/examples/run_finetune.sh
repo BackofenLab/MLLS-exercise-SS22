@@ -1,17 +1,17 @@
 python3 run_finetune.py \
     --model_type dna \
     --tokenizer_name=dna6 \
-    --model_name_or_path ../../../pretrained_models/6-new-12w-0/ \
+    --model_name_or_path /scratch/users/anup/machine_learning_ls/MLLS-exercise-SS22/week_8/pretrain_models/6-new-12w-0/ \
     --task_name dnaprom \
     --do_train \
     --do_eval \
-    --data_dir sample_data/ft/6/ \
+    --data_dir /scratch/users/anup/machine_learning_ls/MLLS-exercise-SS22/week_8/DNABERT/examples/ex_8/ \
     --max_seq_length 100 \
-    --per_gpu_eval_batch_size=32   \
-    --per_gpu_train_batch_size=32   \
+    --per_gpu_eval_batch_size=64   \
+    --per_gpu_train_batch_size=64   \
     --learning_rate 2e-4 \
     --num_train_epochs 5.0 \
-    --output_dir ./ft/6 \
+    --output_dir /scratch/users/anup/machine_learning_ls/MLLS-exercise-SS22/week_8/DNABERT/examples/ex_8/finetuned_model/\
     --evaluate_during_training \
     --logging_steps 100 \
     --save_steps 4000 \
@@ -20,3 +20,4 @@ python3 run_finetune.py \
     --overwrite_output \
     --weight_decay 0.01 \
     --n_process 8
+
