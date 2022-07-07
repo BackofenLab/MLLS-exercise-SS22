@@ -93,7 +93,6 @@ class Weisfeiler_Lehman_Graph():
 			
 				self.label_dict[label] = str(last_num + 1)
 				last_num = last_num + 1
-			
 		return
 
 
@@ -108,8 +107,7 @@ class Weisfeiler_Lehman_Graph():
 			count_list[label] += 1
 	
 		return count_list
-		
-		
+
 
 	def graph_similiarity(self, label1, label2):
 	
@@ -541,8 +539,9 @@ if __name__ == "__main__":
 
 		criterion = nn.L1Loss()
 		best_validation = np.inf
+		epoch_range = 10
 
-		for epoch in range(0, 10):
+		for epoch in range(0, epoch_range):
 		
 			#encoder, decoder, running_loss = train(train_loader, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=dataset.max_length)
 			
@@ -550,7 +549,7 @@ if __name__ == "__main__":
 			running_loss_val, output, input_data, target_data = eval_model(validation_loader, net, criterion = criterion, epoch = epoch)
 			print(f'train-loss in epoch {epoch}: {running_loss}')
 	
-			if running_loss_val <= best_validation:
+			if running_loss_val <= best_validation and epoch > int(epoch_range/2):
 				best_validation = running_loss_val
 				saved_net.load_state_dict(net.state_dict())
 				
