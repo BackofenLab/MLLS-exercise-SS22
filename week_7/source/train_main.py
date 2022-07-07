@@ -19,6 +19,11 @@ import subprocess as sp
 import os
 import math
 
+
+random.seed(0)
+np.random.seed(0)
+
+
 """
 
 MyDataset read in as a graph or not as a graph
@@ -504,7 +509,7 @@ if __name__ == "__main__":
 	scale_factor  = 100
 	dataset = MyDataset("./dms_dataset.fa", kmer=1, scale_factor = scale_factor)
 	kfold_loss = []
-	fold_res = []
+	fold_res = []wei
 	graph_sim_loss = []
 	
 	kfold = KFold(n_splits=5, shuffle=False, random_state=None)
@@ -516,14 +521,18 @@ if __name__ == "__main__":
 	
 		split2 = int(np.floor(0.5 * len(test_val_ind)))
 		val_indices,test_indices = test_val_ind[split2:], test_val_ind[:split2]
+		
+		
+		g = torch.Generator()
+		g.manual_seed(0)
 
 		train_sampler = SubsetRandomSampler(train_indices)
 		valid_sampler = SubsetRandomSampler(val_indices)
 		test_sampler = SubsetRandomSampler(test_indices)
 
-		train_loader = DataLoader(dataset, batch_size=1, sampler = train_sampler, collate_fn=my_collate)
-		validation_loader = DataLoader(dataset, batch_size = 1, sampler = valid_sampler, collate_fn=my_collate)
-		test_loader = DataLoader(dataset, batch_size = 1, sampler = test_sampler, collate_fn=my_collate)
+		train_loader = DataLoader(dataset, batch_size=1, sampler = train_sampler, collate_fn=my_collate, generator=g)
+		validation_loader = DataLoader(dataset, batch_size = 1, sampler = valid_sampler, collate_fn=my_collate, generator=g)
+		test_loader = DataLoader(dataset, batch_size = 1, sampler = test_sampler, collate_fn=my_collate, generator=g)
 	
 		hidden_size = 50
 		net = LSTM(dataset.num_words(),hidden_size, max_length=dataset.max_length)
@@ -566,8 +575,6 @@ if __name__ == "__main__":
 		
 			constraints, input_file = create_fasta_constraints(seq, dms_predicted, file_name, constraints = True, divide_by = scale_factor)
 			
-			print(constraints)
-			
 			
 			first_connections = create_graph(input_file, constraint = True)
 			
@@ -586,7 +593,7 @@ if __name__ == "__main__":
 		
 		
 	for num, auprc in enumerate(kfold_loss):
-		print(f'pearson-correlation in fold {num}: {running_loss}')
+		print(f'pearson-correlation in fold {num}: {{kfold_loss[num]}}')
 		print(f'Graph-similarity in fold {num}: {np.mean(graph_sim_loss[num])}')
 
 	
