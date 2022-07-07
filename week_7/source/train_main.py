@@ -347,15 +347,6 @@ class MyDataset(Dataset):
 			y_encoded = [y*self.scale_factor if seq[num] == "A" or seq[num] == "C" else 0 for num, y in enumerate(y_encoded)]
 			
 			
-			if len(y_encoded) < len(seq):
-			
-				diff = len(seq) - len(y_encoded)
-				
-				for x in range(diff):
-					y_encoded.append(20)
-			
-
-			
 			if len(x_encoded) > max_length: max_length = len(x_encoded) 
 			
 			
