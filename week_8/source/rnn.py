@@ -19,9 +19,10 @@ test_path = "../data/dev.tsv"
 vocab = "AGCT"
 batch_size = 32
 hidden_dim = 100
+fc_hidden_dim = 64
 n_layers = 2
 learning_rate = 2e-4
-n_epochs = 20
+n_epochs = 50
 dropout = 0.1
 embedding_dim = 128
 bidirectional = True
@@ -45,7 +46,9 @@ class RNNSeqClassifier(torch.nn.Module):
             batch_first = True
         )
         # dense layer for assigning class to each sequence of kmers
-        self.fc = torch.nn.Linear(hidden_dim * 2, output_dim)
+        self.fc_hidden = torch.nn.Linear(hidden_dim * 2, fc_hidden_dim)
+        self.fc_relu = torch.nn.ReLU()
+        self.fc_out = torch.nn.Linear(fc_hidden_dim, output_dim)
         self.sigmoid = torch.nn.Sigmoid()
 
 
@@ -53,7 +56,9 @@ class RNNSeqClassifier(torch.nn.Module):
         embedded = self.embedding(text)
         _, (hidden_state, cell_state) = self.lstm(embedded)
         hidden = torch.cat((hidden_state[-2,:,:], hidden_state[-1,:,:]), dim = 1)
-        dense_outputs=self.fc(hidden)
+        fc_hidden = self.fc_hidden(hidden)
+        fc_hidden = self.fc_relu(fc_hidden)
+        dense_outputs = self.fc_out(fc_hidden)
         outputs = self.sigmoid(dense_outputs)
         return outputs
     
@@ -112,7 +117,7 @@ def train_model(X_train, y_train, X_test, y_test):
             y_pred = model(x)
             y_pred = torch.reshape(y_pred, (y_pred.shape[0], ))
             loss = F.binary_cross_entropy(y_pred, y)
-            loss_bat.append(np.round(loss.detach().numpy(), 2))
+            loss_bat.append(loss.detach().numpy())
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -120,8 +125,9 @@ def train_model(X_train, y_train, X_test, y_test):
         # evaluate model after each epoch of training on test data
         pred = evaluate_model(model, loader_test)
         auc_score, acc = calculate_accuray(y_test, pred)
+        mean_batch_loss = np.mean(np.round(loss_bat, 2))
         # output training and evaluation results
-        print("Training: Loss at epoch {} : {}".format(epoch+1, np.round(np.mean(loss_bat), 2)))
+        print("Training: Loss at epoch {} : {}".format(epoch+1, np.round(mean_batch_loss, 4)))
         print("Test: Accuracy at epoch {} : {}".format(epoch+1, acc))
         print("Test: ROC AUC score at epoch {} : {}".format(epoch+1, auc_score))
         print()
@@ -151,8 +157,8 @@ def calculate_accuray(ground_truth, predictions):
             true_negatives += 1
         else:
             pass
-    auc_score = np.round(roc_auc_score(ground_truth, predictions), 2)
-    accuracy = np.round((true_positives + true_negatives) / len(ground_truth), 2)
+    auc_score = np.round(roc_auc_score(ground_truth, predictions), 4)
+    accuracy = np.round((true_positives + true_negatives) / len(ground_truth), 4)
     return auc_score, accuracy
 
 
