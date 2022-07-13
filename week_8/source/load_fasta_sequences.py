@@ -1,12 +1,14 @@
 import os
 import re
+import pandas as pd
 
 
 ################################################################################
 
 def read_fasta_into_dic(fasta_file,
                         convert_to_rna=False,
-                        all_uc=False,
+                        convert_to_dna=True,
+                        all_uc=True,
                         skip_n_seqs=False):
     """
     Read in FASTA sequences from file, return dictionary with mapping:
@@ -36,8 +38,10 @@ def read_fasta_into_dic(fasta_file,
             elif re.search("[ACGTUN]+", line, re.I):
                 m = re.search("([ACGTUN]+)", line, re.I)
                 if seq_id in seqs_dic:
-                    if convert_to_rna:
-                        seqs_dic[seq_id] += m.group(1).replace("T","U").replace("t","u")
+                    '''if convert_to_rna:
+                        seqs_dic[seq_id] += m.group(1).replace("T","U").replace("t","u")'''
+                    if convert_to_dna:
+                        seqs_dic[seq_id] += m.group(1).replace("U","T").replace("u","t")
                     else:
                         seqs_dic[seq_id] += m.group(1)
                 if all_uc:
@@ -65,12 +69,62 @@ def read_fasta_into_dic(fasta_file,
     return seqs_dic
 
 
+def seq2kmer(seq, k):
+    """
+    Convert original sequence to kmers
+    
+    Arguments:
+    seq -- str, original sequence.
+    k -- int, kmer of length k specified.
+    
+    Returns:
+    kmers -- str, kmers separated by space
+
+    """
+    kmer = [seq[x:x+k] for x in range(len(seq)+1-k)]
+    kmers = " ".join(kmer)
+    return kmers
+
+
+def read_seqs(seq_dict, label, k=6, columns=["sequence", "label"]):
+    seqs_kmer = list()
+    class_label = list()
+    for item in seq_dict:
+        seq = seq_dict[item]
+        k_seq = seq2kmer(seq, k)
+        seqs_kmer.append(k_seq)
+        class_label.append(label)
+    dataframe = pd.DataFrame(zip(seqs_kmer, class_label), columns=columns, index=None)
+    return dataframe
+
+
+def merge_pos_neg(pos_seqs, neg_seqs, test_train=0.8):
+    """
+    Merge positive and negative sequences into one file
+    Divide into train and test
+    """
+    pos_df = read_seqs(pos_seqs, 1)
+    neg_df = read_seqs(neg_seqs, 0)
+    merged_df = pd.concat([pos_df, neg_df])
+    merged_df = merged_df.sample(frac=1).reset_index(drop=True)
+    split_pos = int(test_train * len(merged_df.index))
+    train = merged_df[:split_pos]
+    test = merged_df.drop(train.index)
+    train.to_csv("../data/train.tsv", sep="\t", index=None)
+    test.to_csv("../data/dev.tsv", sep="\t", index=None)
+    print(merged_df)
+    print()
+    print(train)
+    print()
+    print(test)
+
+
 ################################################################################
 
 if __name__ == '__main__':
 
-    pos_fasta = "positives.fa"
-    neg_fasta = "negatives.fa"
+    pos_fasta = "../data/positives.fa"
+    neg_fasta = "../data/negatives.fa"
     
     # Load FASTA sequences into dictionaries.
     pos_seqs_dic = read_fasta_into_dic(pos_fasta, 
@@ -84,6 +138,8 @@ if __name__ == '__main__':
 
     print("# positive sequences:  %i" %(len(pos_seqs_dic)))
     print("# negative sequences:  %i" %(len(neg_seqs_dic)))
+
+    merge_pos_neg(pos_seqs_dic, neg_seqs_dic)
 
 
 
